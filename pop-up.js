@@ -96,7 +96,10 @@ class PopUp extends HTMLElement {
 			this.show = false;
 		}
 	}
-	open() {
+	open(scrollTop = true) {
+		if(scrollTop) {
+			this.__internalElements.content.scrollTop = 0;
+		}
 		this.show = true;
 	}
 	// adoptedCallback() {}
