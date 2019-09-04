@@ -70,6 +70,7 @@ class PopUp extends HTMLElement {
 			allow = this.beforeOpen(this);
 		}
 		if(allow) {
+			document.body.style.overflowY = 'hidden';
 			this.style.left = 0;
 			window.addEventListener('keyup', this.__eventHandlers.esckey);
 			if(scrollTop) {
@@ -94,6 +95,7 @@ class PopUp extends HTMLElement {
 			allow = this.beforeClose(this);
 		}
 		if(allow) {
+			document.body.style.overflowY = null;
 			this.style.left = null;
 			this.__isOpen = false;
 			this.dispatchEvent(new CustomEvent('hide', {detail: this}));
