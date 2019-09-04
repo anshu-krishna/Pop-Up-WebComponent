@@ -1,146 +1,215 @@
+/*
+Author: Anshu Krishna
+Conatct: anshu.krishna5@gmail.com
+Date: 05-Sep-2019
+*/
 class PopUp extends HTMLElement {
-	static get template() {
-		if (typeof PopUp._template == "undefined") {
-			PopUp._template = document.createElement("template");
-			PopUp._template.innerHTML =
-				`<style>
-:host {
-	z-index: 500;
-
-	background: rgba(0, 0, 0, 0.90);
-	color: white;
-	
-	width: 100vw;
-	height: 100vh;
-	
-	position: fixed;
-	top: 0;
-	left: -101vw;
-
-	display: flex;
-	flex-direction: column;
-	
-	transition: left 0.2s;
-}
-:host([show]) {
-	left: 0;
-}
-#cntr, #heading_cntr, #content_cntr {
-	background: inherit;
-	color: inherit;
-}
-#cntr {
-	display: flex;
-	flex-direction: column;
-	height: 100%;
-}
-#heading_cntr {
-	display: flex;
-	justify-content: stretch;
-	align-items: center;
-}
-#title_cntr {
-	flex: 1;
-	text-align: center;
-}
-#close_btn {
-	padding: 0.5em;
-	cursor: pointer;
-}
-#content_cntr {
-	display: flex;
-	flex: 1;
-	justify-content: center;
-	align-items: center;
-	overflow: hidden;
-}
-#content {
-	max-height: 100%;
-	overflow-y: auto;
-}
-</style><div id="cntr"><div id="heading_cntr"><div id="title_cntr"><slot name="title"></slot></div><span id="close_btn" title="Close PopUp">&#128473;</span></div><div id="content_cntr"><div id="content"><slot></slot></div></div></div>`;
-		}
-		return PopUp._template;
-	}
 	constructor() {
 		super();
-		this.attachShadow({ mode: "open" });
-		this.shadowRoot.appendChild(PopUp.template.content.cloneNode(true));
-		this.__escHandler = (function (event) {
-			if (event.keyCode == 27) {
-				this.close();
+		let root = this.attachShadow({ mode: 'closed' });
+		root.appendChild(PopUp.__template.content.cloneNode(true));
+		Object.defineProperties(this, {
+			__isOpen: {
+				enumerable: false,
+				writable: true,
+				value: false
+			},
+			__internalNodes: {
+				enumerable: false,
+				writable: false,
+				value: {
+					container: root.querySelector('#cntr'),
+					content: root.querySelector('#content')
+				}
+			},
+			__eventHandlers: {
+				enumerable: false,
+				writable: false,
+				value: {
+					container: (e) => {
+						e.stopPropagation();
+						if(e.target.isSameNode(this.__internalNodes.container)) {
+							this.close();
+						}
+					},
+					content: (e) => {
+						e.stopPropagation();
+					},
+					esckey: ({keyCode}) => {
+						if (keyCode == 27) {
+							this.close();
+						}
+					}
+				}
 			}
-		}).bind(this);
-		this.shadowRoot.querySelector('#close_btn').addEventListener('click', () => {
-			this.close();
 		});
-		this.__internalElements = {
-			contentContainer: this.shadowRoot.querySelector('#content_cntr'),
-			content: this.shadowRoot.querySelector('#content'),
-		};
-		this.__internalElements.contentContainer.onclick = e => this.close();
-		this.__internalElements.content.onclick = e => e.stopPropagation();
+		root.querySelector('#close_btn').onclick = e => this.close();
+		this.__internalNodes.content.addEventListener('click', this.__eventHandlers.content);
+		this.__internalNodes.container.addEventListener('click', this.__eventHandlers.container);
 	}
-	// connectedCallback() { }
-	disconnectedCallback() {
-		document.body.style.overflowY = null;
-		window.removeEventListener('keyup', this.__escHandler);
+	get isOpen() {
+		return this.hasAttribute('open');
 	}
-	close() {
-		if (!this.show) return;
-		let allow = true;
-		if (typeof this.beforeClose == "function") {
-			allow = !!this.beforeClose(this);
-		}
-		if (allow) {
-			this.show = false;
+	set isOpen(value) {
+		if(value) {
+			this.open();
+		} else {
+			this.close();
 		}
 	}
 	open(scrollTop = true) {
-		if(scrollTop) {
-			this.__internalElements.content.scrollTop = 0;
+		if(!this.hasAttribute('open')) {
+			this.setAttribute('open', '');
+			return;
 		}
-		this.show = true;
+		if(this.__isOpen) {
+			return;
+		}
+		let allow = true;
+		if(typeof this.beforeOpen === "function") {
+			allow = this.beforeOpen(this);
+		}
+		if(allow) {
+			this.style.left = 0;
+			window.addEventListener('keyup', this.__eventHandlers.esckey);
+			if(scrollTop) {
+				this.__internalNodes.content.scrollTop = 0;
+			}
+			this.__isOpen = true;
+			this.dispatchEvent(new CustomEvent('show', {detail: this}));
+		} else {
+			this.style.left = null;
+		}
+	}
+	close() {
+		if(this.hasAttribute('open')) {
+			this.removeAttribute('open');
+			return;
+		}
+		if(!this.__isOpen) {
+			return;
+		}
+		let allow = true;
+		if(typeof this.beforeClose === 'function') {
+			allow = this.beforeClose(this);
+		}
+		if(allow) {
+			this.style.left = null;
+			this.__isOpen = false;
+			this.dispatchEvent(new CustomEvent('hide', {detail: this}));
+		} else {
+			this.style.left = 0;
+		}
+	}
+	// connectedCallback() {}
+	disconnectedCallback() {
+		window.removeEventListener('keyup', this.__eventHandlers.esckey);
 	}
 	// adoptedCallback() {}
-	get show() {
-		return this.hasAttribute("show");
-	}
-	set show(val) {
-		if (val) {
-			this.setAttribute("show", '');
-		} else {
-			this.removeAttribute("show");
-		}
-
-	}
 	static get observedAttributes() {
-		return ['show', 'noeasyclose'];
+		return ['open', 'noeasyclose'];
 	}
 	attributeChangedCallback(name, oldval, newval) {
 		// console.log("Changed", name, ":", oldval, "->", newval);
-		switch (name) {
-			case 'show':
-				if (newval === null) {
-					document.body.style.overflowY = null;
-					window.removeEventListener('keyup', this.__escHandler);
-					this.dispatchEvent(new Event('hide'));
+		switch(name) {
+			case 'open':
+				if(newval === null) {
+					this.close();
 				} else {
-					document.body.style.overflowY = 'hidden';
-					window.addEventListener('keyup', this.__escHandler);
-					this.dispatchEvent(new Event('show'));
+					this.open();
 				}
 				break;
 			case 'noeasyclose':
-				if (newval === null) {
-					this.__internalElements.contentContainer.onclick = e => this.close();
-					this.__internalElements.content.onclick = e => e.stopPropagation();
+				if(newval === null) {
+					this.__internalNodes.content.addEventListener('click', this.__eventHandlers.content);
+					this.__internalNodes.container.addEventListener('click', this.__eventHandlers.container);
 				} else {
-					this.__internalElements.contentContainer.onclick = null;
-					this.__internalElements.content.onclick = null;
+					this.__internalNodes.content.removeEventListener('click', this.__eventHandlers.content);
+					this.__internalNodes.container.removeEventListener('click', this.__eventHandlers.container);
 				}
 				break;
 		}
 	}
 }
-customElements.define("pop-up", PopUp);
+Object.defineProperties(PopUp, {
+	__template: {
+		enumerable: false,
+		writable: false,
+		value: document.createElement('template')
+	},
+	tagName: {
+		enumerable: true,
+		writable: false,
+		value: 'pop-up'
+	}
+});
+PopUp.__template.innerHTML =
+`<style>
+:host {
+	--z-index: 1000;
+	--border-gap: 1em;
+	--content-background: white;
+	--content-color: black;
+	--content-border: none;
+	--content-padding: 0.5em;
+	display: flex;
+	z-index: var(--z-index);
+	background: rgba(0, 0, 0, 0.9);
+	color: white;
+	position: fixed;
+	top: 0;
+	left: calc(-1.1 * 100vw);
+	box-sizing: border-box;
+	overflow: hidden;
+	font-size: 1rem;
+	transition: left 0.2s;
+}
+#close_btn {
+	z-index: calc(var(--z-index) + 10);
+	cursor: pointer;
+	position: absolute;
+	top: 0.2em;
+	right: 0.2em;
+	height: 1em;
+	width: auto;
+	font-size: 1.2em;
+	fill: currentColor;
+	stroke: #222;
+	transition: font-size 0.2s;
+}
+#close_btn:hover {
+	font-size: 1.5em;
+}
+#cntr {
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	cursor: pointer;
+	box-sizing: border-box;
+	max-width: 100vw;
+	width: 100vw;
+	max-height: 100vh;
+	height: 100vh;
+}
+:host([noeasyclose]) #cntr {
+	cursor: default;
+}
+#content {
+	box-sizing: border-box;
+	background: var(--content-background);
+	color: var(--content-color);
+	border: var(--content-border);
+	padding: var(--content-padding);
+	cursor: default;
+	max-height: calc(100vh - 2 * var(--border-gap));
+	max-width: calc(100vw - 2 * var(--border-gap));
+	overflow-y: auto;
+}
+</style>
+<div id="cntr">
+	<svg id="close_btn" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="M23 20.2l-8.2-8.2 8.2-8.2-2.8-2.8-8.2 8.2-8.2-8.2-2.8 2.8 8.2 8.2-8.2 8.2 2.8 2.8 8.2-8.2 8.2 8.2z"/></svg>
+<div id="content">
+	<slot></slot>
+</div>
+</div>`;
+customElements.define(PopUp.tagName, PopUp);
